@@ -331,6 +331,27 @@ func main() {
 - Go 1.19+
 - Vite with `@skybolt/vite-plugin`
 
+## Publishing
+
+This package is maintained in the [Skybolt monorepo](https://github.com/JensRoland/skybolt) and automatically synced to [skybolt-go](https://github.com/JensRoland/skybolt-go).
+
+To publish a new version:
+
+1. In the **monorepo**, make your changes in `packages/go/` and push to main
+2. Wait for the sync workflow to push changes to the split repo
+3. In the **split repo** (skybolt-go), create and push a tag:
+
+```sh
+git clone git@github.com:JensRoland/skybolt-go.git
+cd skybolt-go
+git tag v3.1.0
+git push origin v3.1.0
+```
+
+Go modules are published automatically when you push a tag. The Go module proxy (proxy.golang.org) fetches from GitHub. The `publish.yml` GitHub Action verifies the module and creates a GitHub Release with auto-generated release notes.
+
+Users can then install with: `go get github.com/JensRoland/skybolt-go@v3.1.0`
+
 ## License
 
 MIT

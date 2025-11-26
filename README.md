@@ -335,20 +335,22 @@ func main() {
 
 This package is maintained in the [Skybolt monorepo](https://github.com/JensRoland/skybolt) and automatically synced to [skybolt-go](https://github.com/JensRoland/skybolt-go).
 
-To publish a new version:
-
-1. In the **monorepo**, make your changes in `packages/go/` and push to main
-2. Wait for the sync workflow to push changes to the split repo
-3. In the **split repo** (skybolt-go), create and push a tag:
+To publish a new version, run one command from the `packages/go` directory:
 
 ```sh
-git clone git@github.com:JensRoland/skybolt-go.git
-cd skybolt-go
-git tag v3.1.0
-git push origin v3.1.0
+./scripts/release.sh patch   # 3.1.0 → 3.1.1
+./scripts/release.sh minor   # 3.1.0 → 3.2.0
+./scripts/release.sh major   # 3.1.0 → 4.0.0
 ```
 
-Go modules are published automatically when you push a tag. The Go module proxy (proxy.golang.org) fetches from GitHub. The `publish.yml` GitHub Action verifies the module and creates a GitHub Release with auto-generated release notes.
+This automatically:
+
+1. Bumps the version in `VERSION` and `skybolt.go`
+2. Commits and pushes to the monorepo
+3. Sync workflow pushes changes to the split repo
+4. `tag-version.yml` in the split repo creates the `v*` tag
+5. Go module proxy (proxy.golang.org) picks up the tag
+6. `publish.yml` creates a GitHub Release with auto-generated notes
 
 Users can then install with: `go get github.com/JensRoland/skybolt-go@v3.1.0`
 

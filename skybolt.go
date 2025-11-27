@@ -93,7 +93,8 @@ func New(renderMapPath string, cookies map[string]string, cdnURL string) (*Skybo
 //
 // On first visit: inlines CSS with sb-* attributes for caching.
 // On repeat visit: outputs <link> tag (Service Worker serves from cache).
-func (s *Skybolt) CSS(entry string) string {
+// If async is true, CSS is loaded in a non-render-blocking way.
+func (s *Skybolt) CSS(entry string, async bool) string {
 	asset, ok := s.renderMap.Assets[entry]
 	if !ok {
 		return s.comment(fmt.Sprintf("Skybolt: asset not found: %s", entry))
@@ -103,10 +104,30 @@ func (s *Skybolt) CSS(entry string) string {
 
 	// Client has current version - external link (SW serves from cache)
 	if s.hasCached(entry, asset.Hash) {
+		if async {
+			// Preload + onload swap for non-blocking load
+			return fmt.Sprintf(
+				`<link rel="preload" href="%s" as="style" onload="this.rel='stylesheet'">`+
+					`<noscript><link rel="stylesheet" href="%s"></noscript>`,
+				html.EscapeString(assetURL),
+				html.EscapeString(assetURL),
+			)
+		}
 		return fmt.Sprintf(`<link rel="stylesheet" href="%s">`, html.EscapeString(assetURL))
 	}
 
 	// First visit - inline with cache attributes
+	if async {
+		// media="print" trick: browser parses but doesn't apply until onload swaps to "all"
+		return fmt.Sprintf(
+			`<style media="print" onload="this.media='all'" sb-asset="%s:%s" sb-url="%s">%s</style>`,
+			html.EscapeString(entry),
+			html.EscapeString(asset.Hash),
+			html.EscapeString(assetURL),
+			asset.Content,
+		)
+	}
+
 	return fmt.Sprintf(
 		`<style sb-asset="%s:%s" sb-url="%s">%s</style>`,
 		html.EscapeString(entry),

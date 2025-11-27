@@ -52,9 +52,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
     %s
 </body>
 </html>`,
-        sb.CSS("src/css/critical.css"),
+        sb.CSS("src/css/critical.css", false),
         sb.LaunchScript(),
-        sb.CSS("src/css/main.css"),
+        sb.CSS("src/css/main.css", true),
         sb.Script("src/js/app.js", true),
     )
 }
@@ -82,15 +82,24 @@ sb, err := skybolt.New(
 )
 ```
 
-### `CSS(entry string) string`
+### `CSS(entry string, async bool) string`
 
 Render CSS asset.
 
 - First visit: Inlines CSS with caching attributes
 - Repeat visit: Outputs `<link>` tag (Service Worker serves from cache)
 
+When `async` is `true`, CSS loads non-blocking:
+
+- First visit: Uses `media="print"` trick, swaps to `all` on load
+- Repeat visit: Uses `<link rel="preload">` with `onload`
+
 ```go
-sb.CSS("src/css/main.css")
+// Blocking - for critical CSS
+sb.CSS("src/css/critical.css", false)
+
+// Non-blocking - for non-critical CSS
+sb.CSS("src/css/main.css", true)
 ```
 
 ### `Script(entry string, module bool) string`
@@ -207,10 +216,10 @@ func main() {
         sb, _ := skybolt.New("static/.skybolt/render-map.json", cookies, "")
 
         c.HTML(200, "index.html", gin.H{
-            "criticalCSS": sb.CSS("src/css/critical.css"),
+            "criticalCSS":  sb.CSS("src/css/critical.css", false),
             "launchScript": sb.LaunchScript(),
-            "mainCSS": sb.CSS("src/css/main.css"),
-            "appScript": sb.Script("src/js/app.js", true),
+            "mainCSS":      sb.CSS("src/css/main.css", true),
+            "appScript":    sb.Script("src/js/app.js", true),
         })
     })
 
@@ -275,9 +284,9 @@ func main() {
         sb, _ := skybolt.New("static/.skybolt/render-map.json", cookies, "")
 
         return c.Render(200, "index.html", map[string]interface{}{
-            "criticalCSS":  template.HTML(sb.CSS("src/css/critical.css")),
+            "criticalCSS":  template.HTML(sb.CSS("src/css/critical.css", false)),
             "launchScript": template.HTML(sb.LaunchScript()),
-            "mainCSS":      template.HTML(sb.CSS("src/css/main.css")),
+            "mainCSS":      template.HTML(sb.CSS("src/css/main.css", true)),
             "appScript":    template.HTML(sb.Script("src/js/app.js", true)),
         })
     })
@@ -315,9 +324,9 @@ func main() {
         sb, _ := skybolt.New("static/.skybolt/render-map.json", cookies, "")
 
         return c.Render("index", fiber.Map{
-            "criticalCSS":  sb.CSS("src/css/critical.css"),
+            "criticalCSS":  sb.CSS("src/css/critical.css", false),
             "launchScript": sb.LaunchScript(),
-            "mainCSS":      sb.CSS("src/css/main.css"),
+            "mainCSS":      sb.CSS("src/css/main.css", true),
             "appScript":    sb.Script("src/js/app.js", true),
         })
     })

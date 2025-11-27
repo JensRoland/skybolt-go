@@ -1,4 +1,4 @@
-name: Tag Version
+name: Tag and Publish
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
       - 'VERSION'
 
 jobs:
-  tag:
+  tag-and-publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,3 +42,26 @@ jobs:
       - name: Skip (tag exists)
         if: steps.check_tag.outputs.exists == 'true'
         run: echo "Tag v${{ steps.version.outputs.version }} already exists, skipping"
+
+      # Publish Go module
+      - name: Set up Go
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Verify module
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          go mod verify
+          go build ./...
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+        # Go modules are published automatically when you push a tag
+        # The Go module proxy (proxy.golang.org) fetches from GitHub
+        # Users can then: go get github.com/JensRoland/skybolt-go@v3.1.0

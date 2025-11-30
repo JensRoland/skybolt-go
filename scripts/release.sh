@@ -70,7 +70,14 @@ echo "$NEW_VERSION" > VERSION
 # Update skybolt.go
 sed -i '' "s/Version = \"${CURRENT_VERSION}\"/Version = \"${NEW_VERSION}\"/" skybolt.go
 
-echo "Updated: VERSION, skybolt.go"
+# Update go.mod module path if major version changed
+IFS='.' read -r OLD_MAJOR _ _ <<< "$CURRENT_VERSION"
+if [ "$MAJOR" != "$OLD_MAJOR" ]; then
+    sed -i '' "s|module github.com/JensRoland/skybolt-go/v${OLD_MAJOR}|module github.com/JensRoland/skybolt-go/v${MAJOR}|" go.mod
+    echo "Updated: VERSION, skybolt.go, go.mod"
+else
+    echo "Updated: VERSION, skybolt.go"
+fi
 
 # Commit and optionally push
 git add -A

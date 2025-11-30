@@ -14,7 +14,7 @@ import (
 )
 
 // Version is the current version of the Skybolt Go adapter.
-const Version = "3.2.0"
+const Version = "3.3.0"
 
 // Asset represents a single asset in the render map.
 type Asset struct {

@@ -24,9 +24,11 @@ type Asset struct {
 	Content string `json:"content"`
 }
 
-// ClientConfig represents the client script configuration.
-type ClientConfig struct {
-	Script string `json:"script"`
+// LauncherConfig represents the launcher script configuration.
+type LauncherConfig struct {
+	URL     string `json:"url"`
+	Hash    string `json:"hash"`
+	Content string `json:"content"`
 }
 
 // ServiceWorkerConfig represents the service worker configuration.
@@ -42,8 +44,14 @@ type RenderMap struct {
 	SkyboltVersion string              `json:"skyboltVersion"`
 	BasePath       string              `json:"basePath"`
 	Assets         map[string]Asset    `json:"assets"`
-	Client         ClientConfig        `json:"client"`
+	Launcher       LauncherConfig      `json:"launcher"`
 	ServiceWorker  ServiceWorkerConfig `json:"serviceWorker"`
+}
+
+// urlEntryInfo holds entry and hash for URL lookup.
+type urlEntryInfo struct {
+	Entry string
+	Hash  string
 }
 
 // Skybolt is the main struct for rendering assets.
@@ -51,6 +59,7 @@ type Skybolt struct {
 	renderMap   RenderMap
 	clientCache map[string]string
 	cdnURL      string
+	urlToEntry  map[string]urlEntryInfo // Lazily populated URL to entry mapping
 }
 
 // New creates a new Skybolt instance.
@@ -204,6 +213,12 @@ func (s *Skybolt) Preload(entry, asType, mimeType, crossorigin, fetchpriority st
 //
 // Call this once in <head> before other Skybolt assets.
 // Outputs config meta tag and client script.
+//
+// On first visit (or cache miss), the launcher is inlined with sb-asset
+// and sb-url attributes so the client can cache itself.
+//
+// On repeat visits (cache hit), returns an external script tag. The Service
+// Worker will serve the launcher from cache (~5ms response time).
 func (s *Skybolt) LaunchScript() string {
 	swPath := s.renderMap.ServiceWorker.Path
 	if swPath == "" {
@@ -213,10 +228,23 @@ func (s *Skybolt) LaunchScript() string {
 	config := map[string]string{"swPath": swPath}
 	configJSON, _ := json.Marshal(config)
 
+	launcher := s.renderMap.Launcher
+	launcherURL := s.resolveURL(launcher.URL)
+
+	meta := fmt.Sprintf(`<meta name="skybolt-config" content="%s">`+"\n", html.EscapeString(string(configJSON)))
+
+	if s.hasCached("skybolt-launcher", launcher.Hash) {
+		// Repeat visit - external script (SW serves from cache)
+		return fmt.Sprintf(`%s<script type="module" src="%s"></script>`, meta, html.EscapeString(launcherURL))
+	}
+
+	// First visit - inline with sb-asset and sb-url for self-caching
 	return fmt.Sprintf(
-		`<meta name="skybolt-config" content="%s">`+"\n"+`<script type="module">%s</script>`,
-		html.EscapeString(string(configJSON)),
-		s.renderMap.Client.Script,
+		`%s<script type="module" sb-asset="skybolt-launcher:%s" sb-url="%s">%s</script>`,
+		meta,
+		html.EscapeString(launcher.Hash),
+		html.EscapeString(launcherURL),
+		launcher.Content,
 	)
 }
 
@@ -238,6 +266,38 @@ func (s *Skybolt) GetAssetHash(entry string) string {
 		return ""
 	}
 	return asset.Hash
+}
+
+// IsCachedURL checks if an asset URL is currently cached by the client.
+//
+// This is useful for Chain Lightning integration where we need to check
+// cache status by URL rather than source path.
+func (s *Skybolt) IsCachedURL(assetURL string) bool {
+	// Build URL to entry mapping if not already built
+	if s.urlToEntry == nil {
+		s.urlToEntry = make(map[string]urlEntryInfo)
+		for entry, asset := range s.renderMap.Assets {
+			s.urlToEntry[asset.URL] = urlEntryInfo{
+				Entry: entry,
+				Hash:  asset.Hash,
+			}
+		}
+	}
+
+	info, ok := s.urlToEntry[assetURL]
+	if !ok {
+		return false
+	}
+
+	return s.hasCached(info.Entry, info.Hash)
+}
+
+// HasCachedEntry checks if client has a specific entry:hash pair cached.
+//
+// Useful for external integrations (like Chain Lightning) that manage
+// their own assets outside of Skybolt's render-map.
+func (s *Skybolt) HasCachedEntry(entry, hash string) bool {
+	return s.hasCached(entry, hash)
 }
 
 // resolveURL resolves a URL with optional CDN prefix.

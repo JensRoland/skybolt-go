@@ -8,13 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"net/url"
 	"os"
 	"strings"
 )
 
 // Version is the current version of the Skybolt Go adapter.
-const Version = "3.3.1"
+const Version = "3.4.0"
 
 // Asset represents a single asset in the render map.
 type Asset struct {
@@ -57,7 +56,7 @@ type urlEntryInfo struct {
 // Skybolt is the main struct for rendering assets.
 type Skybolt struct {
 	renderMap   RenderMap
-	clientCache map[string]string
+	cacheDigest *CacheDigest
 	cdnURL      string
 	urlToEntry  map[string]urlEntryInfo // Lazily populated URL to entry mapping
 }
@@ -78,11 +77,11 @@ func New(renderMapPath string, cookies map[string]string, cdnURL string) (*Skybo
 		return nil, fmt.Errorf("invalid render map JSON: %w", err)
 	}
 
-	// Parse the sb_assets cookie
-	clientCache := make(map[string]string)
+	// Parse Cache Digest from sb_digest cookie
+	var cacheDigest *CacheDigest
 	if cookies != nil {
-		if sbAssets, ok := cookies["sb_assets"]; ok {
-			clientCache = parseCookie(sbAssets)
+		if sbDigest, ok := cookies["sb_digest"]; ok {
+			cacheDigest = NewCacheDigest(sbDigest)
 		}
 	}
 
@@ -93,7 +92,7 @@ func New(renderMapPath string, cookies map[string]string, cdnURL string) (*Skybo
 
 	return &Skybolt{
 		renderMap:   renderMap,
-		clientCache: clientCache,
+		cacheDigest: cacheDigest,
 		cdnURL:      cdnURL,
 	}, nil
 }
@@ -318,33 +317,10 @@ func (s *Skybolt) resolveURL(assetURL string) string {
 
 // hasCached checks if client has a specific asset version cached.
 func (s *Skybolt) hasCached(entry, hash string) bool {
-	cachedHash, ok := s.clientCache[entry]
-	return ok && cachedHash == hash
-}
-
-// parseCookie parses the sb_assets cookie into a name => hash map.
-func parseCookie(cookie string) map[string]string {
-	if cookie == "" {
-		return make(map[string]string)
+	if s.cacheDigest == nil {
+		return false
 	}
-
-	decoded, err := url.QueryUnescape(cookie)
-	if err != nil {
-		decoded = cookie
-	}
-
-	cache := make(map[string]string)
-	for _, pair := range strings.Split(decoded, ",") {
-		// Find last colon (hash doesn't contain colons, but paths might)
-		colonPos := strings.LastIndex(pair, ":")
-		if colonPos != -1 {
-			name := pair[:colonPos]
-			hash := pair[colonPos+1:]
-			cache[name] = hash
-		}
-	}
-
-	return cache
+	return s.cacheDigest.Lookup(entry + ":" + hash)
 }
 
 // comment generates an HTML comment (for errors/debugging).

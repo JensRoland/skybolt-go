@@ -2,24 +2,24 @@
 #
 # Release script for skybolt (Go adapter)
 #
-# Usage: ./scripts/release.sh [patch|minor|major] [--no-push]
+# Usage: ./scripts/release.sh [patch|minor|major] [--push]
 #
 # This script:
 # 1. Bumps the version in VERSION file
 # 2. Syncs the version to skybolt.go
-# 3. Commits and pushes the changes (unless --no-push is specified)
+# 3. Commits the changes (and pushes if --push is specified)
 #
 # The split repo's tag-version.yml workflow will automatically create the tag.
 
 set -e
 
 BUMP_TYPE=""
-NO_PUSH=false
+PUSH=false
 
 for arg in "$@"; do
     case "$arg" in
-        --no-push)
-            NO_PUSH=true
+        --push)
+            PUSH=true
             ;;
         patch|minor|major)
             BUMP_TYPE="$arg"
@@ -30,7 +30,7 @@ done
 BUMP_TYPE=${BUMP_TYPE:-patch}
 
 if [[ ! "$BUMP_TYPE" =~ ^(patch|minor|major)$ ]]; then
-    echo "Usage: $0 [patch|minor|major] [--no-push]"
+    echo "Usage: $0 [patch|minor|major] [--push]"
     exit 1
 fi
 
@@ -80,18 +80,18 @@ else
 fi
 
 # Commit and optionally push
-git add -A
+git add "$PACKAGE_DIR"
 git commit -m "chore(go): bump skybolt to v${NEW_VERSION}"
 
-if [ "$NO_PUSH" = true ]; then
-    echo ""
-    echo "✓ Committed skybolt (Go) v${NEW_VERSION} (not pushed)"
-    echo ""
-    echo "Run 'git push origin main' when ready."
-else
+if [ "$PUSH" = true ]; then
     git push origin main
     echo ""
     echo "✓ Pushed skybolt (Go) v${NEW_VERSION}"
     echo ""
     echo "Once synced to the split repo, tag-version.yml will create the v${NEW_VERSION} tag."
+else
+    echo ""
+    echo "✓ Committed skybolt (Go) v${NEW_VERSION} (not pushed)"
+    echo ""
+    echo "Run 'git push origin main' when ready."
 fi
